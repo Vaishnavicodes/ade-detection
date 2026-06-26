@@ -164,9 +164,7 @@ def build_condition_occurrence_table(raw_dir: Path) -> pd.DataFrame:
     visit_occurrence_id             : HADM_ID
     """
     dx = _load_csv(raw_dir, "DIAGNOSES_ICD.csv")
-    adm = _load_csv(raw_dir, "ADMISSIONS.csv", parse_dates=["ADMITTIME"])[
-        ["HADM_ID", "ADMITTIME"]
-    ]
+    adm = _load_csv(raw_dir, "ADMISSIONS.csv", parse_dates=["ADMITTIME"])[["HADM_ID", "ADMITTIME"]]
 
     df = dx.merge(adm, on="HADM_ID", how="left")
     admit_dt = pd.to_datetime(df["ADMITTIME"])
