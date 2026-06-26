@@ -42,9 +42,15 @@ logger = logging.getLogger(__name__)
 
 
 def _load_csv(raw_dir: Path, filename: str, **kwargs) -> pd.DataFrame:
-    path = raw_dir / filename
+    # Prefer the gzipped variant if present; pandas decompresses transparently.
+    gz_path = raw_dir / (filename + ".gz")
+    path = gz_path if gz_path.exists() else raw_dir / filename
     logger.info("Reading %s", path)
-    return pd.read_csv(path, **kwargs)
+    df = pd.read_csv(path, compression="infer", **kwargs)
+    # Normalise to UPPERCASE — MIMIC-III demo ships lowercase headers in some
+    # distributions while the full release uses uppercase.
+    df.columns = df.columns.str.upper()
+    return df
 
 
 def _write_parquet(df: pd.DataFrame, processed_dir: Path, name: str) -> None:
