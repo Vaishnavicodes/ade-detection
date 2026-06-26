@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ade-detection"
+version = "0.1.0"
+description = "Phase 1 healthcare ML: Adverse Drug Event detection on MIMIC-III/OMOP data"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Vaishnavi K" }]
+dependencies = [
+    # Shared OMOP-CDM + MLOps utilities — pinned to a stable release tag
+    "omop-mlops-platform @ git+https://github.com/Vaishnavicodes/omop-mlops-platform.git@v0.1.0",
+    "pandas>=2.0",
+    "numpy>=1.26",
+    "scikit-learn>=1.4",
+    "xgboost>=2.0",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0",
+    "pyarrow>=14.0",
+    # NOTE: torch, transformers (ClinicalBERT), and snorkel are NOT listed here.
+    # They are heavy GPU dependencies installed on Colab at runtime.
+    # See notebooks/ for Colab setup cells.
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.4", "black>=24.0"]
+
+[project.urls]
+Homepage = "https://github.com/Vaishnavicodes/ade-detection"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package and dev dependencies
+        # This step pulls omop-mlops-platform from GitHub — confirms the
+        # pinned dependency resolves correctly in a fresh CI environment.
+        run: pip install -e .[dev]
+
+      - name: Lint with ruff
+        run: ruff check .
+
+      - name: Check formatting with black
+        run: black --check .
+
+      - name: Run tests
+        run: pytest -q
+
+      - name: Guard — no patient data files committed
+        run: |
+          MATCHES=$(git ls-files | grep -E '\.(csv|csv\.gz|parquet|pkl)$' || true)
+          if [ -n "$MATCHES" ]; then
+            echo "ERROR: tracked data files found (MIMIC DUA violation):"
+            echo "$MATCHES"
+            exit 1
+          fi
+          echo "OK: no data files tracked."

@@ -1,0 +1,27 @@
+# ade-detection runtime configuration
+# All paths are relative to the project root unless otherwise noted.
+
+paths:
+  # Local paths (small tables: PATIENTS, ADMISSIONS, DIAGNOSES_ICD, PRESCRIPTIONS)
+  raw_data_dir: ./data/raw
+  processed_data_dir: ./data/processed
+  # NOTE (Colab): NOTEEVENTS.csv (~4 GB) lives in Google Drive.
+  # Mount drive and set: raw_data_dir: /content/drive/MyDrive/mimic3/
+  # build_note_table() reads NOTEEVENTS from that mount — do NOT run locally.
+
+omop_tables:
+  - person
+  - visit_occurrence
+  - condition_occurrence
+  - drug_exposure
+  - note
+
+temporal:
+  # Hero #2 — temporal validity rigor.
+  # prediction_timepoint_hours: features are computed using ONLY data
+  # recorded before this many hours post-admission. This ensures no
+  # information after the prediction window leaks into the feature set.
+  # Example: 24h means we predict ADE risk at 24h, using only the first
+  # 24h of labs/meds/notes. This is enforced via omop_mlops index_date + lookback.
+  prediction_timepoint_hours: 24
+  lookback_days: 365

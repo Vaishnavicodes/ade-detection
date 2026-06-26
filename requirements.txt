@@ -1,0 +1,14 @@
+# Core runtime dependencies (mirrors pyproject.toml for environments that prefer requirements.txt)
+omop-mlops-platform @ git+https://github.com/Vaishnavicodes/omop-mlops-platform.git@v0.1.0
+pandas>=2.0
+numpy>=1.26
+scikit-learn>=1.4
+xgboost>=2.0
+pyyaml>=6.0
+python-dotenv>=1.0
+pyarrow>=14.0
+
+# ---- Colab-side heavy deps (do NOT pip install locally) ----
+# torch>=2.0
+# transformers>=4.40      # ClinicalBERT
+# snorkel>=0.9.9          # weak-supervision LabelModel

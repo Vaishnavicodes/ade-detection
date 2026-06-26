@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+
+# Secrets
+.env
+*.env
+
+# Distribution
+MANIFEST
+pip-log.txt
+.tox/
+.cache/
+*.dist-info/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# MLflow
+mlruns/
+mlartifacts/
+
+# Data files — MIMIC data use agreement: NEVER commit patient data
+*.csv
+*.csv.gz
+*.parquet
+*.pkl
+*.pickle
+/data/
+/data/raw/
+/data/processed/
+
+# Notebooks checkpoints
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
