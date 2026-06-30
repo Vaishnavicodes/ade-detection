@@ -20,7 +20,8 @@ dependencies = [
     "pyyaml>=6.0",
     "python-dotenv>=1.0",
     "pyarrow>=14.0",
-    # NOTE: torch, transformers (ClinicalBERT), and snorkel are NOT listed here.
+    "snorkel>=0.9.9",
+    # NOTE: torch and transformers (ClinicalBERT) are NOT listed here.
     # They are heavy GPU dependencies installed on Colab at runtime.
     # See notebooks/ for Colab setup cells.
 ]
