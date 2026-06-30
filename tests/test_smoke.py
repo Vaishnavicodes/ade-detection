@@ -103,6 +103,7 @@ def synthetic_admissions():
             "ADMITTIME": ["2150-01-05 10:00:00", "2160-07-01 08:30:00", "2170-11-20 14:00:00"],
             "DISCHTIME": ["2150-01-10 12:00:00", "2160-07-08 09:00:00", "2170-11-25 11:00:00"],
             "ADMISSION_TYPE": ["EMERGENCY", "ELECTIVE", "EMERGENCY"],
+            "DISCHARGE_LOCATION": ["HOME", "HOME HEALTH CARE", "DEAD/EXPIRED"],
         }
     )
 

@@ -123,8 +123,10 @@ def build_visit_occurrence_table(raw_dir: Path) -> pd.DataFrame:
     visit_start_datetime    : ADMITTIME
     visit_end_date          : DISCHTIME date
     visit_end_datetime      : DISCHTIME
-    visit_type_concept_id   : 0  TODO: Athena
-    visit_source_value      : ADMISSION_TYPE
+    visit_type_concept_id              : 0  TODO: Athena
+    visit_source_value                 : ADMISSION_TYPE
+    admission_type_source_value        : ADMISSION_TYPE (explicit; used by lf_elective_admission)
+    discharge_location_source_value    : DISCHARGE_LOCATION (used by lf_routine_discharge)
     """
     df = _load_csv(raw_dir, "ADMISSIONS.csv")
     admit = pd.to_datetime(df["ADMITTIME"], errors="coerce")
@@ -141,6 +143,11 @@ def build_visit_occurrence_table(raw_dir: Path) -> pd.DataFrame:
             "visit_end_datetime": disch,
             "visit_type_concept_id": 0,  # TODO: Athena
             "visit_source_value": df["ADMISSION_TYPE"].str.strip(),
+            "admission_type_source_value": df["ADMISSION_TYPE"].str.strip(),
+            "discharge_location_source_value": df["DISCHARGE_LOCATION"]
+            .fillna("UNKNOWN")
+            .astype(str)
+            .str.strip(),
         }
     )
     return result
@@ -212,7 +219,10 @@ def build_drug_exposure_table(raw_dir: Path) -> pd.DataFrame:
     drug_exposure_end_date      : ENDDATE date
     drug_exposure_end_datetime  : ENDDATE datetime
     drug_type_concept_id        : 0  TODO: Athena
-    drug_source_value           : NDC code (raw — used for ADE matching)
+    drug_source_value           : NDC code (standard OMOP source key)
+    drug_name_source_value      : PRESCRIPTIONS.DRUG — human-readable drug name used by
+                                  drug_normalization.normalize_drug_name() and lf_sider_curated.
+                                  NDC is sparsely populated in MIMIC; DRUG is the reliable text.
     drug_source_concept_id      : 0
     visit_occurrence_id         : HADM_ID
     dose_unit_source_value      : DOSE_UNIT_RX
@@ -239,6 +249,7 @@ def build_drug_exposure_table(raw_dir: Path) -> pd.DataFrame:
             "drug_exposure_end_datetime": end_dt,
             "drug_type_concept_id": 0,  # TODO: Athena
             "drug_source_value": df["NDC"].astype(str).str.strip(),
+            "drug_name_source_value": df["DRUG"].astype(str).str.strip(),
             "drug_source_concept_id": 0,
             "visit_occurrence_id": df["HADM_ID"].astype(int),
             "dose_unit_source_value": df["DOSE_UNIT_RX"].astype(str).str.strip(),

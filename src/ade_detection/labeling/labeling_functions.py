@@ -6,13 +6,14 @@ Each LF operates on a single admission row (pd.Series) with pre-joined fields:
   drug_names              list[str]   raw drug strings from drug_exposure
   length_of_stay_days     float       (discharge_datetime - admit_datetime).days
   discharge_disposition   str         MIMIC ADMISSIONS.DISCHARGE_LOCATION
+  admission_type          str         MIMIC ADMISSIONS.ADMISSION_TYPE
 
-Apply all four LFs via snorkel.labeling.PandasLFApplier on the cohort DataFrame:
+Apply all five LFs via snorkel.labeling.PandasLFApplier on the cohort DataFrame:
 
     applier = PandasLFApplier(lfs=get_local_lfs())
-    L = applier.apply(cohort_df)          # L shape: (n_admissions, 4)
+    L = applier.apply(cohort_df)          # L shape: (n_admissions, 5)
     label_model = LabelModel(cardinality=2)
-    label_model.fit(L)
+    label_model.fit(L, class_balance=[0.90, 0.10])
     probs = label_model.predict_proba(L)  # ade_prob per admission
 """
 
@@ -49,24 +50,43 @@ ADE = 1
 # ---------------------------------------------------------------------------
 
 
+def normalize_icd9(code: str) -> str:
+    """Strip dots and uppercase so dotted and dotless ICD-9 codes compare equal.
+
+    MIMIC stores codes without dots ("5845", "E9478"); ade_mappings uses dotted
+    human-readable forms ("584.5", "E947.8"). Normalising both sides before any
+    comparison ensures they match regardless of representation.
+    """
+    return code.strip().upper().replace(".", "")
+
+
 def _is_ecode_ade(code: str) -> bool:
-    """True if *code* is an ICD-9 E-code in the drug-ADE range E930–E949."""
-    code = code.strip().upper()
+    """True if *code* is an ICD-9 E-code in the drug-ADE range E930–E949.
+
+    Works on dotless MIMIC codes (e.g. "E9305") and dotted forms ("E930.5").
+    The category is the three digits immediately after "E"; the trailing
+    sub-digit is not used for the range check.
+    """
+    code = normalize_icd9(code)
     if not code.startswith("E"):
         return False
     try:
-        return 930 <= int(code[1:].split(".")[0]) <= 949
+        return 930 <= int(code[1:4]) <= 949
     except ValueError:
         return False
 
 
 def _is_ade_diagnosis_code(code: str) -> bool:
-    """True if *code* is 995.2x (adverse drug effect) or 960–979 (drug poisoning)."""
-    code = code.strip()
-    if code.startswith("995.2"):
+    """True if *code* is 995.2x (adverse drug effect) or 960–979 (drug poisoning).
+
+    Operates on dotless codes: 995.2x → "9952" prefix; 960–979 poisoning →
+    first three digits in [960, 979].
+    """
+    code = normalize_icd9(code)
+    if code.startswith("9952"):  # 995.20–995.29 adverse drug effect
         return True
     try:
-        return 960 <= int(code.split(".")[0]) <= 979
+        return 960 <= int(code[:3]) <= 979
     except ValueError:
         return False
 
@@ -130,6 +150,21 @@ def lf_routine_discharge(x) -> int:
 
 
 @labeling_function()
+def lf_elective_admission(x) -> int:
+    """NOT_ADE negative anchor: planned admission with no ADE-positive codes.
+
+    Elective admissions (ADMISSION_TYPE = "ELECTIVE") are pre-scheduled procedures
+    such as planned surgery. They have limited opportunity for unplanned drug
+    adverse events to drive the admission. Requires complete absence of any
+    ADE-positive ICD-9 code pattern to avoid mislabelling true ADEs that happen
+    to occur during planned stays.
+    """
+    if str(x.admission_type).strip().upper() == "ELECTIVE" and not _has_ade_codes(x.icd9_codes):
+        return NOT_ADE
+    return ABSTAIN
+
+
+@labeling_function()
 def lf_sider_curated(x) -> int:
     """ADE if the admission has BOTH a drug AND a co-occurring ICD-9 from the same SIDER pattern.
 
@@ -148,9 +183,12 @@ def lf_sider_curated(x) -> int:
         )
         if not drug_matched:
             continue
+        # Normalize both the data code and the pattern prefix to dotless so
+        # MIMIC's "5849" matches ade_mappings' human-readable "584.9".
         for code in x.icd9_codes:
+            dotless_code = normalize_icd9(str(code))
             for prefix in pattern["icd9_prefixes"]:
-                if str(code).strip().startswith(prefix):
+                if dotless_code.startswith(normalize_icd9(prefix)):
                     return ADE
     return ABSTAIN
 
@@ -163,6 +201,13 @@ def lf_sider_curated(x) -> int:
 def get_local_lfs() -> list:
     """Return all local (non-note) labeling functions for PandasLFApplier.
 
+    5 LFs: 3 positive (ADE) + 2 negative (NOT_ADE) for balanced supervision.
     Note-based LFs (lf_note_mention) run on Colab and are not included here.
     """
-    return [lf_ecode, lf_ade_diagnosis, lf_routine_discharge, lf_sider_curated]
+    return [
+        lf_ecode,
+        lf_ade_diagnosis,
+        lf_routine_discharge,
+        lf_elective_admission,
+        lf_sider_curated,
+    ]
