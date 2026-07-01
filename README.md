@@ -96,6 +96,40 @@ ruff check .
 black .
 ```
 
+## Running with Docker
+
+**Build:**
+
+```bash
+docker build -t ade-detection:latest .
+```
+
+**Run** (model artifacts are mounted at runtime — they are not baked into the image):
+
+```bash
+docker run -p 8000:8000 \
+  -v ${PWD}/data/processed:/app/data/processed \
+  ade-detection:latest
+```
+
+The API is available at <http://localhost:8000>. Swagger UI is at <http://localhost:8000/docs>.
+
+**Why the volume mount?**
+`data/processed/` contains MIMIC-derived artifacts (`xgb_ade_calibrated.joblib`,
+`xgb_ade_model.json`, `test.parquet`) that are gitignored under the MIMIC DUA and must
+never be committed or baked into an image. At container startup `serve_ade.py` loads them
+from the mounted path (`ADE_PROCESSED_DIR=/app/data/processed`, set in the Dockerfile).
+If the mount is missing, the server exits at startup with a clear `FileNotFoundError`.
+
+**Override the artifact path** (e.g. models stored elsewhere):
+
+```bash
+docker run -p 8000:8000 \
+  -e ADE_PROCESSED_DIR=/models \
+  -v /your/path/to/models:/models \
+  ade-detection:latest
+```
+
 ---
 
 ## Related repos

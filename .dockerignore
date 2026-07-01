@@ -1,0 +1,39 @@
+# Model artifacts and MIMIC-derived data — must NEVER be baked into the image.
+# Mount data/processed at runtime: -v ${PWD}/data/processed:/app/data/processed
+data/
+
+# Python environment — rebuild inside the image instead.
+.venv/
+
+# Bytecode caches
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# Version control
+.git/
+.github/
+
+# Tests — not needed at runtime.
+tests/
+
+# Data artifact extensions (belt-and-suspenders alongside data/ exclusion)
+*.parquet
+*.joblib
+*.pkl
+*.csv
+
+# ML experiment tracking
+mlruns/
+
+# Notebooks
+notebooks/
+
+# Build/lint caches
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Local config
+.env
