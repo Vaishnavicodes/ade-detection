@@ -58,6 +58,7 @@ def synthetic_processed(tmp_path):
             "gender_concept_id": [8507],
             "race_concept_id": [0],
             "ethnicity_concept_id": [0],
+            "gender_source_value": ["M"],
         }
     )
 
@@ -67,6 +68,7 @@ def synthetic_processed(tmp_path):
             "person_id": [1, 1],
             "visit_start_datetime": pd.to_datetime(["2151-05-01 08:00", "2151-06-01 09:00"]),
             "visit_end_datetime": pd.to_datetime(["2151-05-10 10:00", "2151-06-04 11:00"]),
+            "ethnicity_source_value": ["WHITE", "WHITE"],
         }
     )
 
@@ -315,6 +317,8 @@ def test_expected_feature_columns_present(features):
         "person_id",
         "visit_start_datetime",
         "age_at_admission",
+        "is_female",
+        "ethnicity_group",
         "n_drugs_first24h",
         "n_distinct_drugs_first24h",
         "n_prior_conditions",
@@ -323,6 +327,23 @@ def test_expected_feature_columns_present(features):
         "ade_label",
     }
     assert required.issubset(set(features.columns))
+
+
+def test_is_female_derived_from_gender_source_value(features):
+    """gender_source_value='M' → is_female=0 for the synthetic patient."""
+    row101 = features[features["visit_occurrence_id"] == 101].iloc[0]
+    assert row101["is_female"] == 0
+
+
+def test_ethnicity_group_bucketed_from_source_value(features):
+    """ethnicity_source_value='WHITE' → ethnicity_group='WHITE'."""
+    row101 = features[features["visit_occurrence_id"] == 101].iloc[0]
+    assert row101["ethnicity_group"] == "WHITE"
+
+
+def test_ethnicity_group_is_string_column(features):
+    """ethnicity_group must be a string/object dtype — not numeric."""
+    assert features["ethnicity_group"].dtype == object
 
 
 def test_prior_comorb_columns_present(features):

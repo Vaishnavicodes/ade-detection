@@ -104,6 +104,7 @@ def synthetic_admissions():
             "DISCHTIME": ["2150-01-10 12:00:00", "2160-07-08 09:00:00", "2170-11-25 11:00:00"],
             "ADMISSION_TYPE": ["EMERGENCY", "ELECTIVE", "EMERGENCY"],
             "DISCHARGE_LOCATION": ["HOME", "HOME HEALTH CARE", "DEAD/EXPIRED"],
+            "ETHNICITY": ["WHITE", "BLACK/AFRICAN AMERICAN", "HISPANIC OR LATINO"],
         }
     )
 
@@ -130,5 +131,6 @@ def test_build_visit_occurrence_table_columns(synthetic_admissions, tmp_path):
     assert "visit_occurrence_id" in result.columns
     assert "person_id" in result.columns
     assert "visit_start_datetime" in result.columns
+    assert "ethnicity_source_value" in result.columns
     assert len(result) == 3
     assert list(result["visit_occurrence_id"]) == [100, 101, 102]

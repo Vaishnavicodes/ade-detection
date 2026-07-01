@@ -2,7 +2,7 @@
 
 Index date: admission_start + prediction_timepoint_hours (default 24 h).
 All features use ONLY data knowable at that point:
-  - Demographics: static (age, gender, race, ethnicity)
+  - Demographics: static (age, is_female) + per-admission audit column (ethnicity_group)
   - First-24h medications: drugs given during [admission_start, index_date]
   - Prior history: conditions/drugs from PREVIOUS admissions only,
     within lookback_days before the index date
@@ -12,6 +12,15 @@ Anti-leakage hard exclusions applied to every feature group:
   - SIDER curated ADE drug list (from ade_mappings.get_all_ade_drugs())
   - Current-admission diagnosis codes are never used as prior-history features
   - No drug administered after the 24-h index is counted in first-24h features
+
+Demographic design note — model features vs. audit-only columns:
+  is_female (0/1 int) is a model feature; age_at_admission is a model feature.
+  ethnicity_group is a STRING column and is therefore excluded from the model's
+  feature set by _get_feature_cols() (which skips non-numeric columns).  It is
+  carried in the feature matrix solely for fairness_audit.py.  Feeding ethnicity
+  as a model input would risk the classifier keying on it directly; keeping it
+  audit-only ensures the audit measures bias that the model cannot explain away
+  by having explicitly learned the demographic label.
 
 Why the omop_mlops high-level functions are not used for prior history:
   comorbidity_flags() and medication_counts() operate per person_id with a single
@@ -64,6 +73,36 @@ _CHARLSON_DOTLESS: dict[str, list[str]] = {
     name: [normalize_icd9(p) for p in prefixes] for name, prefixes in CHARLSON_ICD9_GROUPS.items()
 }
 _CHARLSON_GROUPS: list[str] = list(CHARLSON_ICD9_GROUPS.keys())
+
+
+# ---------------------------------------------------------------------------
+# Ethnicity bucketing (per-admission ADMISSIONS.ETHNICITY → 6 clean groups)
+# ---------------------------------------------------------------------------
+
+# Ordered: first match wins.  Substrings are checked against the uppercased raw value.
+_ETHNICITY_BUCKET_RULES: list[tuple[str, str]] = [
+    ("BLACK", "BLACK"),
+    ("AFRICAN", "BLACK"),
+    ("HISPANIC", "HISPANIC"),
+    ("LATINO", "HISPANIC"),
+    ("ASIAN", "ASIAN"),
+    ("WHITE", "WHITE"),
+    ("CAUCASIAN", "WHITE"),
+    ("UNKNOWN", "UNKNOWN"),
+    ("UNABLE TO OBTAIN", "UNKNOWN"),
+    ("PATIENT DECLINED", "UNKNOWN"),
+    ("NOT SPECIFIED", "UNKNOWN"),
+    ("OTHER", "OTHER"),
+]
+
+
+def _bucket_ethnicity(raw: str) -> str:
+    """Map a raw MIMIC ADMISSIONS.ETHNICITY string to a 6-level bucket."""
+    upper = str(raw).strip().upper()
+    for substring, bucket in _ETHNICITY_BUCKET_RULES:
+        if substring in upper:
+            return bucket
+    return "OTHER"
 
 
 # ---------------------------------------------------------------------------
@@ -157,7 +196,12 @@ def build_features(processed_dir: str | Path, config: dict) -> pd.DataFrame:
     pd.DataFrame
         One row per admission, keyed by visit_occurrence_id.  Columns:
           visit_occurrence_id, person_id, visit_start_datetime, index_datetime,
-          age_at_admission, gender_concept_id, race_concept_id, ethnicity_concept_id,
+          age_at_admission  — clipped to 90 for MIMIC 89+ de-identification
+          is_female         — 1=Female 0=Male/Unknown (model feature)
+          ethnicity_group   — WHITE/BLACK/HISPANIC/ASIAN/OTHER/UNKNOWN (STRING;
+                              audit-only column, NOT fed to the model)
+          gender_concept_id, race_concept_id, ethnicity_concept_id — retained for
+                              OMOP completeness (all 0 in MIMIC v1 ETL; not model features)
           n_drugs_first24h, n_distinct_drugs_first24h,
           prior_comorb_{charlson_group} (one per CHARLSON_ICD9_GROUPS entry),
           n_prior_conditions, n_prior_drug_exposures,
@@ -206,7 +250,9 @@ def build_features(processed_dir: str | Path, config: dict) -> pd.DataFrame:
     )
 
     # ----------------------------------------------------------------
-    # DEMOGRAPHICS (static; no temporal filter needed)
+    # DEMOGRAPHICS
+    # Static patient demographics from person.parquet; per-admission
+    # ethnicity from visit_occurrence.parquet.
     # ----------------------------------------------------------------
     _demo_want = [
         "person_id",
@@ -214,11 +260,15 @@ def build_features(processed_dir: str | Path, config: dict) -> pd.DataFrame:
         "gender_concept_id",
         "race_concept_id",
         "ethnicity_concept_id",
+        "gender_source_value",  # 'M'/'F' raw string → is_female (0/1)
     ]
     _demo_avail = [c for c in _demo_want if c in person_df.columns]
-    base = visit_df[
-        ["visit_occurrence_id", "person_id", "visit_start_datetime", "index_datetime"]
-    ].merge(person_df[_demo_avail], on="person_id", how="left")
+
+    _visit_cols = ["visit_occurrence_id", "person_id", "visit_start_datetime", "index_datetime"]
+    if "ethnicity_source_value" in visit_df.columns:
+        _visit_cols.append("ethnicity_source_value")
+
+    base = visit_df[_visit_cols].merge(person_df[_demo_avail], on="person_id", how="left")
 
     if "year_of_birth" in base.columns:
         base["age_at_admission"] = base["visit_start_datetime"].dt.year - base["year_of_birth"]
@@ -235,6 +285,20 @@ def build_features(processed_dir: str | Path, config: dict) -> pd.DataFrame:
         base["age_at_admission"] = base["age_at_admission"].clip(upper=90)
     else:
         base["age_at_admission"] = 0
+
+    # is_female: numeric model feature derived from gender_source_value
+    if "gender_source_value" in base.columns:
+        base["is_female"] = (base["gender_source_value"].str.upper() == "F").astype(int)
+        base = base.drop(columns=["gender_source_value"])
+    else:
+        base["is_female"] = 0
+
+    # ethnicity_group: STRING audit-only column (skipped by _get_feature_cols)
+    if "ethnicity_source_value" in base.columns:
+        base["ethnicity_group"] = base["ethnicity_source_value"].apply(_bucket_ethnicity)
+        base = base.drop(columns=["ethnicity_source_value"])
+    else:
+        base["ethnicity_group"] = "UNKNOWN"
 
     for col in ["age_at_admission", "gender_concept_id", "race_concept_id", "ethnicity_concept_id"]:
         if col not in base.columns:
@@ -402,7 +466,13 @@ def build_features(processed_dir: str | Path, config: dict) -> pd.DataFrame:
         if col in features.columns:
             features[col] = features[col].fillna(0).astype(int)
 
-    for col in ["age_at_admission", "gender_concept_id", "race_concept_id", "ethnicity_concept_id"]:
+    for col in [
+        "age_at_admission",
+        "is_female",
+        "gender_concept_id",
+        "race_concept_id",
+        "ethnicity_concept_id",
+    ]:
         if col in features.columns:
             features[col] = features[col].fillna(0).astype(int)
 
@@ -451,6 +521,7 @@ def main() -> None:
         "ade_label",
         "visit_start_datetime",
         "index_datetime",
+        "ethnicity_group",  # audit-only string column; not a model feature
     }
     feature_cols = [c for c in features.columns if c not in meta_cols]
 

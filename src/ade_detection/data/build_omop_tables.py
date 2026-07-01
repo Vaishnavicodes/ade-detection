@@ -127,6 +127,10 @@ def build_visit_occurrence_table(raw_dir: Path) -> pd.DataFrame:
     visit_source_value                 : ADMISSION_TYPE
     admission_type_source_value        : ADMISSION_TYPE (explicit; used by lf_elective_admission)
     discharge_location_source_value    : DISCHARGE_LOCATION (used by lf_routine_discharge)
+    ethnicity_source_value             : ETHNICITY (raw per-admission string from ADMISSIONS;
+                                         used by build_features to derive ethnicity_group for
+                                         fairness auditing — per-admission because MIMIC stores
+                                         ethnicity on each admission, not on the patient record)
     """
     df = _load_csv(raw_dir, "ADMISSIONS.csv")
     admit = pd.to_datetime(df["ADMITTIME"], errors="coerce")
@@ -148,6 +152,11 @@ def build_visit_occurrence_table(raw_dir: Path) -> pd.DataFrame:
             .fillna("UNKNOWN")
             .astype(str)
             .str.strip(),
+            "ethnicity_source_value": df["ETHNICITY"]
+            .fillna("UNKNOWN")
+            .astype(str)
+            .str.strip()
+            .str.upper(),
         }
     )
     return result
