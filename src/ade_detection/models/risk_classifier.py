@@ -202,7 +202,7 @@ def train_model(
     if model_save_path is not None:
         model_save_path = Path(model_save_path)
         model_save_path.parent.mkdir(parents=True, exist_ok=True)
-        model.save_model(str(model_save_path))
+        model.get_booster().save_model(str(model_save_path))
         logger.info("Model saved to %s", model_save_path)
 
     metrics = {

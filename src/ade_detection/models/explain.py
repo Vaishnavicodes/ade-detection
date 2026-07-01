@@ -45,26 +45,6 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _fix_base_score(model: XGBClassifier) -> None:
-    """Normalise XGBoost 3.x base_score in-place before passing to SHAP.
-
-    XGBoost 3.x auto-computes base_score from training data and stores it as a
-    bracketed JSON array (e.g. "[1.5E-1]") rather than a scalar.  SHAP's
-    TreeExplainer reads this value via save_config() and calls float() on it,
-    which raises ValueError on the bracket format in some version combinations.
-    Setting base_score explicitly on the booster forces a scalar representation.
-    """
-    import json
-
-    booster = model.get_booster()
-    cfg = json.loads(booster.save_config())
-    raw = cfg.get("learner", {}).get("learner_model_param", {}).get("base_score", "0.5")
-    # raw may be "[1.5E-1]" (array) or "1.5E-1" (scalar) — normalise to float
-    if raw.startswith("["):
-        raw = raw.strip("[]")
-    booster.set_param("base_score", str(float(raw)))
-
-
 def explain_model(model: XGBClassifier, X: pd.DataFrame) -> np.ndarray:
     """Compute SHAP values for every sample in X using TreeExplainer.
 
@@ -84,8 +64,7 @@ def explain_model(model: XGBClassifier, X: pd.DataFrame) -> np.ndarray:
     np.ndarray, shape (n_samples, n_features)
         SHAP values for the positive (ADE=1) class.
     """
-    _fix_base_score(model)
-    # Guard: ensure all feature columns are float — rejects string-y dtypes early.
+    # Guard: coerce to float so string-y dtypes fail early with a clear error.
     X = X.astype(float)
     explainer = shap.TreeExplainer(model)
     shap_out = explainer.shap_values(X)
@@ -158,7 +137,6 @@ def top_drivers_for_admission(
         Columns: feature, shap_value, feature_value.
         Sorted by |shap_value| descending (most influential first).
     """
-    _fix_base_score(model)
     row = X.iloc[[idx]].astype(float)
     explainer = shap.TreeExplainer(model)
     shap_out = explainer.shap_values(row)
