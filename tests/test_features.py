@@ -332,3 +332,73 @@ def test_prior_comorb_columns_present(features):
 
 def test_age_at_admission_is_positive(features):
     assert (features["age_at_admission"] > 0).all()
+
+
+def test_age_at_admission_clipped_to_90(tmp_path, monkeypatch):
+    """Ages >89 from MIMIC's 89+ de-identification shift must be clipped to 90."""
+    import yaml
+
+    from ade_detection.features.build_features import build_features
+
+    config = {
+        "paths": {"processed_data_dir": str(tmp_path)},
+        "temporal": {"prediction_timepoint_hours": 24, "lookback_days": 365},
+    }
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(yaml.dump(config))
+
+    # Patient with a shifted birth year producing age ~300
+    base_dt = pd.Timestamp("2150-01-01")
+    person_df = pd.DataFrame(
+        {
+            "person_id": [99],
+            "year_of_birth": [1850],  # 2150 - 1850 = 300
+            "gender_concept_id": [8507],
+            "race_concept_id": [0],
+            "ethnicity_concept_id": [0],
+        }
+    )
+    visit_df = pd.DataFrame(
+        {
+            "visit_occurrence_id": [999],
+            "person_id": [99],
+            "visit_start_datetime": [base_dt],
+            "visit_end_datetime": [base_dt + pd.Timedelta(days=3)],
+        }
+    )
+    empty_cond = pd.DataFrame(
+        columns=[
+            "visit_occurrence_id",
+            "person_id",
+            "condition_source_value",
+            "condition_start_datetime",
+            "condition_end_datetime",
+        ]
+    )
+    empty_drug = pd.DataFrame(
+        columns=[
+            "visit_occurrence_id",
+            "person_id",
+            "drug_name_source_value",
+            "drug_exposure_start_datetime",
+        ]
+    )
+    labels_df = pd.DataFrame({"visit_occurrence_id": [999], "ade_label": [0], "ade_prob": [0.1]})
+
+    for df, name in [
+        (person_df, "person"),
+        (visit_df, "visit_occurrence"),
+        (empty_cond, "condition_occurrence"),
+        (empty_drug, "drug_exposure"),
+        (labels_df, "ade_labels"),
+    ]:
+        df.to_parquet(tmp_path / f"{name}.parquet", index=False)
+
+    with open(cfg_path) as fh:
+        cfg = yaml.safe_load(fh)
+    result = build_features(tmp_path, cfg)
+
+    assert (
+        result["age_at_admission"] <= 90
+    ).all(), f"age_at_admission exceeded 90: {result['age_at_admission'].tolist()}"
+    assert result["age_at_admission"].iloc[0] == 90

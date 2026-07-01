@@ -223,6 +223,16 @@ def build_features(processed_dir: str | Path, config: dict) -> pd.DataFrame:
     if "year_of_birth" in base.columns:
         base["age_at_admission"] = base["visit_start_datetime"].dt.year - base["year_of_birth"]
         base = base.drop(columns=["year_of_birth"])
+        # MIMIC-III shifts birth years of patients aged 89+ forward by a random offset
+        # to satisfy HIPAA de-identification, producing computed ages up to ~300.
+        # Standard handling: clip to 90, meaning "90 or older".
+        n_clipped = int((base["age_at_admission"] > 89).sum())
+        if n_clipped:
+            logger.info(
+                "Clipped %d age_at_admission values >89 to 90 (MIMIC 89+ de-identification shift)",
+                n_clipped,
+            )
+        base["age_at_admission"] = base["age_at_admission"].clip(upper=90)
     else:
         base["age_at_admission"] = 0
 
