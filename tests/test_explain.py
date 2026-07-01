@@ -35,11 +35,13 @@ def tiny_model_and_X():
         "n_prior_conditions",
         "n_prior_drug_exposures",
     ]
-    X_tr = rng.random((n_train, n_feat))
-    y_tr = (rng.random(n_train) > 0.85).astype(int)
-    X_te = rng.random((n_test, n_feat))
+    X_tr = rng.random((n_train, n_feat)).astype(np.float64)
+    y_tr = (rng.random(n_train) > 0.85).astype(np.int32)
+    X_te = rng.random((n_test, n_feat)).astype(np.float64)
 
-    model = XGBClassifier(n_estimators=10, max_depth=3, random_state=0, verbosity=0)
+    # base_score=0.5 avoids XGBoost 3.x auto-computing it from training data and
+    # storing it as a bracketed JSON string ("[1.5E-1]") that SHAP can't parse.
+    model = XGBClassifier(n_estimators=10, max_depth=3, random_state=0, verbosity=0, base_score=0.5)
     model.fit(X_tr, y_tr)
 
     X_df = pd.DataFrame(X_te, columns=feature_names)
