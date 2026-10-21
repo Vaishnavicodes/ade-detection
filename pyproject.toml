@@ -13,7 +13,7 @@ authors = [{ name = "Vaishnavi K" }]
 dependencies = [
     # Shared OMOP-CDM + MLOps utilities — pinned to a stable release tag
     "omop-mlops-platform @ git+https://github.com/Vaishnavicodes/omop-mlops-platform.git@v0.1.0",
-    "pandas>=2.0",
+    "pandas>=2.0,<3",
     "numpy>=1.26,<2",
     "scikit-learn>=1.4",
     "xgboost>=2.0,<3",
