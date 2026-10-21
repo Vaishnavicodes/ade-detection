@@ -280,7 +280,7 @@ def main() -> None:
     print(f"  Precision         : {ops['precision']:.3f}")
     print(f"  F1                : {ops['f1']:.3f}")
     print("=" * 55)
-    print(f"\nModel saved → {model_path}")
+    print(f"\nModel saved -> {model_path}")
 
 
 if __name__ == "__main__":

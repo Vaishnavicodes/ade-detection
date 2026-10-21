@@ -242,7 +242,7 @@ def _save_bar_chart(table: pd.DataFrame, dim_name: str, out_path: Path) -> None:
     plt.tight_layout()
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
-    logger.info("Saved bar chart → %s", out_path)
+    logger.info("Saved bar chart -> %s", out_path)
 
 
 # ---------------------------------------------------------------------------
@@ -316,9 +316,9 @@ def _print_table(dim_col: str, table: pd.DataFrame, gap: float | None) -> None:
 
     if gap is not None:
         flag = " *** HIGH GAP — investigate ***" if gap > 0.10 else ""
-        print(f"\n  Sensitivity GAP (n≥{_SMALL_N}): {gap:.4f}{flag}")
+        print(f"\n  Sensitivity GAP (n>={_SMALL_N}): {gap:.4f}{flag}")
     else:
-        print(f"\n  Sensitivity GAP: N/A (fewer than 2 subgroups with n≥{_SMALL_N})")
+        print(f"\n  Sensitivity GAP: N/A (fewer than 2 subgroups with n>={_SMALL_N})")
 
     small = table[table["n"] < _SMALL_N]
     if not small.empty:
@@ -361,7 +361,7 @@ def main() -> None:
 
         csv_path = processed_dir / f"fairness_{dim_col}.csv"
         table.to_csv(csv_path, index=False)
-        logger.info("Saved table → %s", csv_path)
+        logger.info("Saved table -> %s", csv_path)
 
         png_path = processed_dir / f"fairness_{dim_col}.png"
         _save_bar_chart(table, dim_col, png_path)
